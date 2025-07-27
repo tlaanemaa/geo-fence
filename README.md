@@ -31,7 +31,7 @@ _You can also just run the `geo-fence.sh` script directly on your system if you 
 | Variable            | What it does                               | Default                       |
 | ------------------- | ------------------------------------------ | ----------------------------- |
 | `ALLOWED_COUNTRIES` | Countries that can access your server      | `se`                          |
-| `IPSET_NAME`        | Internal name (change if running multiple) | `geo_fence_allowlist_ipv4_v1` |
+| `IPSET_NAME`        | Internal name (change if running multiple) | `geo_fence_allow_v1` |
 | `UPDATE_INTERVAL`   | How often to update (seconds)              | `604800` (7 days)             |
 
 ## 🎯 How it works
@@ -61,5 +61,5 @@ _You can also just run the `geo-fence.sh` script directly on your system if you 
 **Locked out?** (need console access):
 
 ```bash
-iptables -D INPUT -m set ! --match-set geo_fence_allowlist_ipv4_v1 src -j DROP
+iptables -D INPUT -m set ! --match-set geo_fence_allow_v1 src -j DROP
 ```

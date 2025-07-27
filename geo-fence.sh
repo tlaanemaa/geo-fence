@@ -4,8 +4,8 @@
 set -euo pipefail
 
 # Configuration - these can be overridden by environment variables
-IPSET_NAME="${IPSET_NAME:-geo_fence_allowlist_ipv4_v1}"  # Name for our IP set
-ALLOWED_COUNTRIES="${ALLOWED_COUNTRIES:-se}"             # Countries to allow (comma-separated)
+IPSET_NAME="${IPSET_NAME:-geo_fence_allow_v1}"  # Name for our IP set
+ALLOWED_COUNTRIES="${ALLOWED_COUNTRIES:-se}"    # Countries to allow (comma-separated)
 
 echo "[$(date)] Starting geo-fence update for countries: $ALLOWED_COUNTRIES"
 
