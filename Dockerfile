@@ -1,5 +1,5 @@
 # Start with a minimal Debian base image
-FROM debian:slim
+FROM debian:stable-slim
 
 # Install the tools we need:
 # - curl: for downloading IP range files
