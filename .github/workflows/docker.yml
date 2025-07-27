@@ -6,6 +6,9 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
+  schedule:
+    # Rebuild every 14 days at 02:00 UTC to get latest base image updates
+    - cron: '0 2 */14 * *'
 
 env:
   REGISTRY: ghcr.io
