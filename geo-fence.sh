@@ -78,9 +78,13 @@ iptables -C INPUT -i lo -j ACCEPT 2>/dev/null || iptables -I INPUT -i lo -j ACCE
 # Allow SSH connections from anywhere (prevents lockout - cloud firewall handles restriction)
 iptables -C INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 22 -j ACCEPT
 
-# Apply the main geo-fence rule: DROP any traffic NOT from our allowed IP set
-# The "!" means "not" - so this drops traffic from IPs not in our set
-# This takes effect IMMEDIATELY - existing connections from blocked countries are dropped
+# Allow established and related connections (return traffic from server-initiated connections)
+# This ensures DNS responses, apt updates, API responses, etc. work normally
+iptables -C INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -I INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Apply the main geo-fence rule: DROP any NEW traffic NOT from our allowed IP set
+# The "!" means "not" - so this drops NEW connections from IPs not in our set
+# Established connections (return traffic) are allowed by the rule above
 iptables -C INPUT -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null || iptables -I INPUT -m set ! --match-set "$IPSET_NAME" src -j DROP
 
 echo "[$(date)] ✅ Geo-fence active with $total IP ranges"

@@ -4,6 +4,17 @@ _Simple firewall that only allows traffic from specific countries. Blocks everyt
 
 ## 🚀 Quick Start
 
+**Prerequisites: Install ipset on host**
+
+```bash
+# Ubuntu/Debian:
+apt update && apt install ipset -y
+
+# CentOS/RHEL:
+yum install ipset -y
+# or: dnf install ipset -y
+```
+
 **Step 1: Secure SSH first**
 
 - Configure your cloud firewall to restrict SSH (port 22) to your IP only
@@ -28,11 +39,11 @@ _You can also just run the `geo-fence.sh` script directly on your system if you 
 
 ## ⚙️ Settings
 
-| Variable            | What it does                               | Default                       |
-| ------------------- | ------------------------------------------ | ----------------------------- |
-| `ALLOWED_COUNTRIES` | Countries that can access your server      | `se`                          |
+| Variable            | What it does                               | Default              |
+| ------------------- | ------------------------------------------ | -------------------- |
+| `ALLOWED_COUNTRIES` | Countries that can access your server      | `se`                 |
 | `IPSET_NAME`        | Internal name (change if running multiple) | `geo_fence_allow_v1` |
-| `UPDATE_INTERVAL`   | How often to update (seconds)              | `604800` (7 days)             |
+| `UPDATE_INTERVAL`   | How often to update (seconds)              | `604800` (7 days)    |
 
 ## 🎯 How it works
 
@@ -49,9 +60,10 @@ _You can also just run the `geo-fence.sh` script directly on your system if you 
 
 **Other important stuff**:
 
+- **Requires ipset on host**: Container needs host kernel ipset modules for IP set matching to work
 - Only handles IPv4 (block IPv6 separately: `ip6tables -P INPUT DROP`)
 - Needs `--cap-add=NET_ADMIN` and `--network=host`
-- Immediate effect - existing connections from blocked countries get dropped
+- Blocks NEW connections from blocked countries (existing connections stay active)
 - Always have console access as backup!
 
 ## 🆘 Help
@@ -63,3 +75,27 @@ _You can also just run the `geo-fence.sh` script directly on your system if you 
 ```bash
 iptables -D INPUT -m set ! --match-set geo_fence_allow_v1 src -j DROP
 ```
+
+## 🔧 Troubleshooting
+
+**Traffic not being blocked?**
+
+1. **Check if ipset is installed on host:**
+
+   ```bash
+   ipset --version
+   # If command not found, install: apt install ipset
+   ```
+
+2. **Verify ipset contains data:**
+
+   ```bash
+   ipset list geo_fence_allow_v1 | head -10
+   # Should show IP ranges for your allowed countries
+   ```
+
+3. **Check iptables rules exist:**
+   ```bash
+   iptables -L INPUT -n --line-numbers | head -5
+   # Should show: loopback ACCEPT, SSH ACCEPT, ESTABLISHED ACCEPT, geo-fence DROP
+   ```
