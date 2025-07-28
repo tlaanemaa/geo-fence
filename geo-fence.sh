@@ -13,7 +13,7 @@ ALLOWED_COUNTRIES="${ALLOWED_COUNTRIES:-se}"    # Countries to allow (comma-sepa
 
 # Logging helper
 log() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+  echo "[$(date)] $1"
 }
 
 # === DOWNLOAD IP RANGES ===
