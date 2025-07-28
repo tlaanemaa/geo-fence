@@ -50,7 +50,7 @@ Done! Your open ports now only accept traffic from those countries.
 - VPNs/proxies in allowed countries bypass geo-blocking
 - Requires `--cap-add=NET_ADMIN` and `--network=host`
 
-**Docker Integration**: Automatically detects and protects Docker containers via FORWARD chain. No container configuration changes needed.
+**Docker Integration**: Automatically detects Docker and protects containers via DOCKER-USER chain when present. Works on systems with or without Docker. No container configuration changes needed.
 
 **Best practice**: Use as an additional layer alongside proper cloud firewall configuration.
 
@@ -64,8 +64,8 @@ Done! Your open ports now only accept traffic from those countries.
 # Remove host geo-fence rule
 iptables -D INPUT -m set ! --match-set geo_fence_allow_v1 src -j DROP
 
-# Remove Docker geo-fence rule
-iptables -D FORWARD -m set ! --match-set geo_fence_allow_v1 src -j DROP
+# Remove Docker geo-fence rule (only if Docker is installed)
+iptables -D DOCKER-USER -m set ! --match-set geo_fence_allow_v1 src -j DROP 2>/dev/null || true
 ```
 
 ## 🔧 Troubleshooting
@@ -75,12 +75,12 @@ iptables -D FORWARD -m set ! --match-set geo_fence_allow_v1 src -j DROP
 1. **Check ipset installed**: `ipset --version`
 2. **Verify ipset has data**: `ipset list geo_fence_allow_v1 | head -10`
 3. **Check host protection**: `iptables -L INPUT -n --line-numbers | head -5`
-4. **Check Docker protection**: `iptables -L FORWARD -n --line-numbers`
+4. **Check Docker protection (if installed)**: `iptables -L DOCKER-USER -n --line-numbers 2>/dev/null || echo "Docker not detected"`
 5. **Test your IP**: `ipset test geo_fence_allow_v1 $(curl -s ipinfo.io/ip)`
 
 Should show: loopback ACCEPT, SSH ACCEPT, ESTABLISHED ACCEPT, geo-fence DROP
 
-**For Docker containers**: Geo-fence rule should appear in the FORWARD chain.
+**For Docker containers**: Geo-fence rule should appear in the DOCKER-USER chain (only if Docker is installed).
 
 **Multiple instances running?**
 

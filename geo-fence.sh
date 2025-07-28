@@ -145,15 +145,23 @@ fi
 while iptables -D INPUT -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; do
     :  # Keep removing until no more instances exist
 done
-while iptables -D FORWARD -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; do
+while iptables -D DOCKER-USER -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; do
     :  # Keep removing until no more instances exist
 done
 
-# Apply geo-fence blocking to both traffic paths:
+# Apply geo-fence blocking to traffic paths:
 # INPUT chain = traffic to host services (SSH, web servers running on host)
-# FORWARD chain = traffic forwarded to Docker containers (your containerized services)
 iptables -A INPUT -m set ! --match-set "$IPSET_NAME" src -j DROP
-iptables -A FORWARD -m set ! --match-set "$IPSET_NAME" src -j DROP
 
-log "   Added: Geo-fence blocking (protects host + Docker containers)"
-log "🎯 Geo-fence active: $total_ranges IP ranges protecting host + containers"
+# DOCKER-USER chain = traffic to Docker containers (only if Docker is installed)
+if iptables -L DOCKER-USER >/dev/null 2>&1; then
+    iptables -I DOCKER-USER 1 -m set ! --match-set "$IPSET_NAME" src -j DROP
+    log "   Added: Geo-fence blocking (protects host + Docker containers)"
+else
+    log "   Added: Geo-fence blocking (protects host services - Docker not detected)"
+fi
+if iptables -L DOCKER-USER >/dev/null 2>&1; then
+    log "🎯 Geo-fence active: $total_ranges IP ranges protecting host + containers"
+else
+    log "🎯 Geo-fence active: $total_ranges IP ranges protecting host"
+fi
