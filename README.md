@@ -8,7 +8,7 @@ Adds geo-blocking as a **secondary security layer** on top of your cloud firewal
 
 **Universal Protection**: Automatically protects both host services AND all Docker containers with a single deployment.
 
-**Use case**: You already have a secure cloud firewall, now you want to add country-level filtering to reduce scanner traffic and geographic restrictions across your entire server infrastructure.
+**Use case**: You already have a secure cloud firewall, now you want to add country-level filtering to reduce scanner traffic and apply geographic restrictions across your entire server infrastructure.
 
 ## 🚀 Quick Start
 
@@ -37,7 +37,7 @@ Done! Your open ports now only accept traffic from those countries.
 | ------------------- | ------------------------------------------ | -------------------- |
 | `ALLOWED_COUNTRIES` | Countries that can access your server      | `se`                 |
 | `IPSET_NAME`        | Internal name (change if running multiple) | `geo_fence_allow_v1` |
-| `UPDATE_INTERVAL`   | How often to update (seconds)              | `604800` (7 days)    |
+| `UPDATE_INTERVAL`   | How often to update IP ranges (seconds)    | `604800` (7 days)    |
 
 ## 🔒 Security Notes
 
@@ -52,7 +52,7 @@ Done! Your open ports now only accept traffic from those countries.
 
 **Docker Integration**: Automatically detects and protects Docker containers via FORWARD chain. No container configuration changes needed.
 
-**Best practice**: Use as additional layer alongside proper cloud firewall configuration.
+**Best practice**: Use as an additional layer alongside proper cloud firewall configuration.
 
 ## 🆘 Help
 
@@ -81,3 +81,9 @@ iptables -D FORWARD -m set ! --match-set geo_fence_allow_v1 src -j DROP
 Should show: loopback ACCEPT, SSH ACCEPT, ESTABLISHED ACCEPT, geo-fence DROP
 
 **For Docker containers**: Geo-fence rule should appear in the FORWARD chain.
+
+**Multiple instances running?**
+
+- Only run one geo-fence container per server
+- If manually running the script, ensure no other instances are active
+- The script is not designed for concurrent execution
