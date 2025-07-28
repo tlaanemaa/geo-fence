@@ -141,8 +141,13 @@ if ! iptables -C INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null; then
 fi
 
 # Remove any existing geo-fence rules to start clean
-iptables -D INPUT -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null || true
-iptables -D FORWARD -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null || true
+# Loop to remove ALL instances of the rule (not just the first one)
+while iptables -D INPUT -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; do
+    :  # Keep removing until no more instances exist
+done
+while iptables -D FORWARD -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; do
+    :  # Keep removing until no more instances exist
+done
 
 # Apply geo-fence blocking to both traffic paths:
 # INPUT chain = traffic to host services (SSH, web servers running on host)
