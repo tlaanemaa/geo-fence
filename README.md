@@ -1,28 +1,20 @@
 # 🛡️ Geo-fence
 
-_Simple firewall that only allows traffic from specific countries. Blocks everything else!_
+_Add country-based traffic filtering to your existing cloud firewall. Reduces noise and blocks unwanted regions._
+
+## 🎯 What This Does
+
+Adds geo-blocking as a **secondary security layer** on top of your cloud firewall. Downloads IP ranges for allowed countries and blocks NEW connections from everywhere else.
+
+**Use case**: You already have a secure cloud firewall, now you want to add country-level filtering to reduce scanner traffic and geographic restrictions.
 
 ## 🚀 Quick Start
 
-**Prerequisites: Install ipset on host**
+**Prerequisites:**
+- Secure cloud firewall configured (IPv6 blocked, SSH restricted to your IP)
+- Install ipset: `apt install ipset` (Ubuntu/Debian) or `yum install ipset` (CentOS/RHEL)
 
-```bash
-# Ubuntu/Debian:
-apt update && apt install ipset -y
-
-# CentOS/RHEL:
-yum install ipset -y
-# or: dnf install ipset -y
-```
-
-**Step 1: Secure SSH first**
-
-- Configure your cloud firewall to restrict SSH (port 22) to your IP only
-- Test that SSH still works
-- **Why?** This geo-fence doesn't protect SSH (it's your safety net if the script breaks)
-
-**Step 2: Deploy geo-fence**
-
+**Deploy:**
 ```bash
 docker run -d \
   --cap-add=NET_ADMIN \
@@ -33,9 +25,7 @@ docker run -d \
   ghcr.io/tlaanemaa/geo-fence:latest
 ```
 
-Done! Your server now only accepts traffic from those countries.
-
-_You can also just run the `geo-fence.sh` script directly on your system if you prefer._
+Done! Your open ports now only accept traffic from those countries.
 
 ## ⚙️ Settings
 
@@ -45,33 +35,23 @@ _You can also just run the `geo-fence.sh` script directly on your system if you 
 | `IPSET_NAME`        | Internal name (change if running multiple) | `geo_fence_allow_v1` |
 | `UPDATE_INTERVAL`   | How often to update (seconds)              | `604800` (7 days)    |
 
-## 🎯 How it works
-
-1. Downloads IP ranges for your allowed countries
-2. Blocks ALL traffic from everywhere else
-3. **Exception**: SSH stays open globally (you secure it via cloud firewall)
-4. Updates automatically every 7 days
-
-**Result**: Only people from allowed countries can access your Minecraft server, web apps, APIs, etc.
-
 ## 🔒 Security Notes
 
-**SSH Strategy**: We intentionally don't geo-fence SSH - it's your emergency access if things break. You handle SSH security via your cloud firewall.
+**Architecture**: Cloud Firewall (primary security) → Geo-fence (country filtering) → Your Services
 
-**Other important stuff**:
+**Important limitations:**
+- IPv4 only (block IPv6 via cloud firewall)
+- SSH stays globally accessible (secure via cloud firewall)
+- VPNs/proxies in allowed countries bypass geo-blocking
+- Requires `--cap-add=NET_ADMIN` and `--network=host`
 
-- **Requires ipset on host**: Container needs host kernel ipset modules for IP set matching to work
-- Only handles IPv4 (block IPv6 separately: `ip6tables -P INPUT DROP`)
-- Needs `--cap-add=NET_ADMIN` and `--network=host`
-- Blocks NEW connections from blocked countries (existing connections stay active)
-- Always have console access as backup!
+**Best practice**: Use as additional layer alongside proper cloud firewall configuration.
 
 ## 🆘 Help
 
 **View logs**: `docker logs geo-fence`
 
-**Locked out?** (need console access):
-
+**Locked out?** (console access needed):
 ```bash
 iptables -D INPUT -m set ! --match-set geo_fence_allow_v1 src -j DROP
 ```
@@ -80,22 +60,8 @@ iptables -D INPUT -m set ! --match-set geo_fence_allow_v1 src -j DROP
 
 **Traffic not being blocked?**
 
-1. **Check if ipset is installed on host:**
+1. **Check ipset installed**: `ipset --version`
+2. **Verify ipset has data**: `ipset list geo_fence_allow_v1 | head -10`
+3. **Check iptables rules**: `iptables -L INPUT -n --line-numbers | head -5`
 
-   ```bash
-   ipset --version
-   # If command not found, install: apt install ipset
-   ```
-
-2. **Verify ipset contains data:**
-
-   ```bash
-   ipset list geo_fence_allow_v1 | head -10
-   # Should show IP ranges for your allowed countries
-   ```
-
-3. **Check iptables rules exist:**
-   ```bash
-   iptables -L INPUT -n --line-numbers | head -5
-   # Should show: loopback ACCEPT, SSH ACCEPT, ESTABLISHED ACCEPT, geo-fence DROP
-   ```
+Should show: loopback ACCEPT, SSH ACCEPT, ESTABLISHED ACCEPT, geo-fence DROP
