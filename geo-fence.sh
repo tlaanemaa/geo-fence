@@ -157,11 +157,8 @@ iptables -A INPUT -m set ! --match-set "$IPSET_NAME" src -j DROP
 if iptables -L DOCKER-USER >/dev/null 2>&1; then
     iptables -I DOCKER-USER 1 -m set ! --match-set "$IPSET_NAME" src -j DROP
     log "   Added: Geo-fence blocking (protects host + Docker containers)"
-else
-    log "   Added: Geo-fence blocking (protects host services - Docker not detected)"
-fi
-if iptables -L DOCKER-USER >/dev/null 2>&1; then
     log "🎯 Geo-fence active: $total_ranges IP ranges protecting host + containers"
 else
+    log "   Added: Geo-fence blocking (protects host services - Docker not detected)"
     log "🎯 Geo-fence active: $total_ranges IP ranges protecting host"
 fi
