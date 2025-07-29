@@ -1,89 +1,92 @@
 # 🛡️ Geo-fence
 
-_Add country-based traffic filtering to your existing cloud firewall. Reduces noise and blocks unwanted regions._
+**The simple, containerized firewall that blocks traffic from unwanted countries.**
 
-## 🎯 What This Does
+Geo-fence automatically blocks all incoming IPv4 traffic except from countries you explicitly allow. It runs in a lightweight Docker container, protecting both the host system and other Docker containers with zero configuration.
 
-Adds geo-blocking as a **secondary security layer** on top of your cloud firewall. Downloads IP ranges for allowed countries and blocks NEW connections from everywhere else.
+It's the perfect tool to:
 
-**Universal Protection**: Automatically protects both host services AND all Docker containers with a single deployment.
+- **Reduce attack surface:** Block scanners and bots from entire regions.
+- **Enforce compliance:** Restrict access based on geographic requirements.
+- **Clean up logs:** Eliminate noise from unauthorized sources.
 
-**Use case**: You already have a secure cloud firewall, now you want to add country-level filtering to reduce scanner traffic and apply geographic restrictions across your entire server infrastructure.
+⚠️ **Before You Start**
 
-## 🚀 Quick Start
+- **Secure Your SSH Port:** Geo-fence intentionally leaves port 22 open to prevent lockouts. You **must** secure SSH yourself using a firewall and strong (key-based) authentication.
+- **IPv4 Only:** This tool does not block IPv6 traffic. If your server has an IPv6 address, you must secure it separately at your cloud provider's firewall.
+- **This Is One Layer:** Geo-fence reduces your attack surface but is not a complete security solution. Use it as part of a layered defense strategy.
 
-**Prerequisites:**
+## Key Features
 
-- Secure cloud firewall configured (IPv6 blocked, SSH restricted to your IP)
-- Install ipset: `apt install ipset` (Ubuntu/Debian) or `yum install ipset` (CentOS/RHEL)
+- **Automatic Country Blocking:** Creates a firewall that only allows traffic from the countries you specify in `ALLOWED_COUNTRIES`.
+- **Host & Container Protection:** The firewall applies to the host's network and all Docker containers, providing universal protection.
+- **Zero-Downtime Updates:** IP lists are updated atomically in the background, ensuring your services are never interrupted.
+- **Lockout Prevention:** SSH (port 22) is always permitted, so you never lose access to your server.
 
-**Deploy:**
+## Quick Start
+
+**1. Prerequisite:**
+`ipset` must be installed on the host.
+
+```bash
+# Ubuntu/Debian
+apt-get update && apt-get install -y ipset
+
+# CentOS/RHEL
+yum install -y ipset
+```
+
+**2. Deploy:**
+Update `ALLOWED_COUNTRIES` with the 2-letter codes of countries you want to allow.
 
 ```bash
 docker run -d \
-  --cap-add=NET_ADMIN \
-  --network=host \
-  --restart unless-stopped \
-  -e ALLOWED_COUNTRIES="se,ee,fi,de,nl" \
   --name geo-fence \
+  --restart unless-stopped \
+  --network=host \
+  --cap-add=NET_ADMIN \
+  -e ALLOWED_COUNTRIES="us,ca,gb" \
   ghcr.io/tlaanemaa/geo-fence:latest
 ```
 
-Done! Your open ports now only accept traffic from those countries.
-
-## ⚙️ Settings
-
-| Variable            | What it does                               | Default              |
-| ------------------- | ------------------------------------------ | -------------------- |
-| `ALLOWED_COUNTRIES` | Countries that can access your server      | `se`                 |
-| `IPSET_NAME`        | Internal name (change if running multiple) | `geo_fence_allow_v1` |
-| `UPDATE_INTERVAL`   | How often to update IP ranges (seconds)    | `604800` (7 days)    |
-
-## 🔒 Security Notes
-
-**Architecture**: Cloud Firewall (primary security) → Geo-fence (country filtering) → Your Services (host + Docker)
-
-**Important limitations:**
-
-- IPv4 only (block IPv6 via cloud firewall)
-- SSH stays globally accessible (secure via cloud firewall)
-- VPNs/proxies in allowed countries bypass geo-blocking
-- Requires `--cap-add=NET_ADMIN` and `--network=host`
-
-**Docker Integration**: Automatically detects Docker and protects containers via DOCKER-USER chain when present. Works on systems with or without Docker. No container configuration changes needed.
-
-**Best practice**: Use as an additional layer alongside proper cloud firewall configuration.
-
-## 🆘 Help
-
-**View logs**: `docker logs geo-fence`
-
-**Locked out?** (console access needed):
+**3. Verify:**
+You can check the logs to see the firewall being built.
 
 ```bash
-# Remove host geo-fence rule
-iptables -D INPUT -m set ! --match-set geo_fence_allow_v1 src -j DROP
-
-# Remove Docker geo-fence rule (only if Docker is installed)
-iptables -D DOCKER-USER -m set ! --match-set geo_fence_allow_v1 src -j DROP 2>/dev/null || true
+docker logs geo-fence
 ```
 
-## 🔧 Troubleshooting
+## How It Works
 
-**Traffic not being blocked?**
+Geo-fence uses `ipset` and `iptables` to create an efficient, high-performance firewall.
 
-1. **Check ipset installed**: `ipset --version`
-2. **Verify ipset has data**: `ipset list geo_fence_allow_v1 | head -10`
-3. **Check host protection**: `iptables -L INPUT -n --line-numbers | head -5`
-4. **Check Docker protection (if installed)**: `iptables -L DOCKER-USER -n --line-numbers 2>/dev/null || echo "Docker not detected"`
-5. **Test your IP**: `ipset test geo_fence_allow_v1 $(curl -s ipinfo.io/ip)`
+1.  **Fetch:** It downloads the latest IP address ranges for your allowed countries from `ipdeny.com`.
+2.  **Build:** It creates a temporary `ipset` with the new IP ranges.
+3.  **Swap:** It atomically swaps the old IP set with the new one, ensuring zero downtime.
+4.  **Enforce:** An `iptables` rule directs all incoming and forwarded traffic through the filter, dropping any packets from sources not in the `ipset`.
 
-Should show: loopback ACCEPT, SSH ACCEPT, ESTABLISHED ACCEPT, geo-fence DROP
+This process repeats automatically every 7 days to keep the IP lists current.
 
-**For Docker containers**: Geo-fence rule should appear in the DOCKER-USER chain (only if Docker is installed).
+## Configuration
 
-**Multiple instances running?**
+| Environment Variable | Description                                     | Default           |
+| -------------------- | ----------------------------------------------- | ----------------- |
+| `ALLOWED_COUNTRIES`  | Comma-separated list of 2-letter country codes. | `se`              |
+| `UPDATE_INTERVAL`    | How often to update IP lists, in seconds.       | `604800` (7 days) |
 
-- Only run one geo-fence container per server
-- If manually running the script, ensure no other instances are active
-- The script is not designed for concurrent execution
+## Troubleshooting
+
+#### Emergency Unlock
+
+If you are locked out, connect to your server via a recovery console (e.g., VNC or a cloud provider console) and run these commands to disable the firewall rules:
+
+```bash
+iptables -D INPUT -j GEO-FENCE-CHECK 2>/dev/null || true
+iptables -D FORWARD -j GEO-FENCE-CHECK 2>/dev/null || true
+```
+
+#### Common Issues
+
+- **Traffic not being blocked?** Check the logs (`docker logs geo-fence`) to ensure the correct IP ranges were loaded. Use `ipset list geo_fence` to inspect the active list.
+- **`ipset` not found?** Ensure `ipset` is installed on the host machine.
+- **Cloud firewall conflicts:** Remember that this firewall runs _on your server_. If a cloud firewall is blocking traffic before it reaches your server, Geo-fence won't see it.

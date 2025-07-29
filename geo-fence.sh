@@ -8,13 +8,34 @@
 set -euo pipefail
 
 # Configuration - these can be overridden by environment variables
-IPSET_NAME="${IPSET_NAME:-geo_fence_allow_v1}"  # Name for our IP set
 ALLOWED_COUNTRIES="${ALLOWED_COUNTRIES:-se}"    # Countries to allow (comma-separated)
+
+# Fixed names to avoid orphaned resources and conflicts
+CHAIN_NAME="GEO-FENCE-CHECK"                    # iptables chain name
+IPSET_NAME="geo_fence"                          # ipset name
 
 # Logging helper
 log() {
   echo "[$(date)] $1"
 }
+
+# === PREREQUISITES CHECK ===
+
+# Check if running as root
+if [[ $EUID -ne 0 ]]; then
+   log "❌ This script must be run as root (for iptables/ipset access)"
+   exit 1
+fi
+
+# Check if required commands are available
+for cmd in iptables ipset curl; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        log "❌ Required command not found: $cmd"
+        exit 1
+    fi
+done
+
+log "✅ Prerequisites check passed"
 
 # === DOWNLOAD IP RANGES ===
 
@@ -114,51 +135,49 @@ ipset destroy "$temp_set"
 
 log "✅ IP set updated successfully"
 
-# === CONFIGURE FIREWALL ===
+# === CONFIGURE FIREWALL INFRASTRUCTURE ===
 
-log "🔧 Configuring firewall rules"
+log "🔧 Preparing firewall infrastructure"
 
-# Essential ACCEPT rules that must come before our DROP rules
-# These prevent you from getting locked out of your server
-
-# Allow established and related connections (return traffic from server-initiated connections)
-# This ensures DNS responses, apt updates, ping replies, API responses, etc. work normally
-if ! iptables -C INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; then
-    iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
-    log "   Added: Allow return traffic (keeps internet working)"
-fi
-
-# Allow loopback traffic (localhost talking to itself - essential for many services)
-if ! iptables -C INPUT -i lo -j ACCEPT 2>/dev/null; then
-    iptables -A INPUT -i lo -j ACCEPT
-    log "   Added: Allow loopback traffic (localhost communication)"
-fi
-
-# Allow SSH connections from anywhere (prevents lockout - cloud firewall should restrict this)
-if ! iptables -C INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null; then
-    iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-    log "   Added: Allow SSH (prevents lockout - secure this via your cloud firewall)"
-fi
-
-# Remove any existing geo-fence rules to start clean
-# Loop to remove ALL instances of the rule (not just the first one)
-while iptables -D INPUT -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; do
-    :  # Keep removing until no more instances exist
-done
-while iptables -D DOCKER-USER -m set ! --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; do
-    :  # Keep removing until no more instances exist
-done
-
-# Apply geo-fence blocking to traffic paths:
-# INPUT chain = traffic to host services (SSH, web servers running on host)
-iptables -A INPUT -m set ! --match-set "$IPSET_NAME" src -j DROP
-
-# DOCKER-USER chain = traffic to Docker containers (only if Docker is installed)
-if iptables -L DOCKER-USER >/dev/null 2>&1; then
-    iptables -A DOCKER-USER -m set ! --match-set "$IPSET_NAME" src -j DROP
-    log "   Added: Geo-fence blocking (protects host + Docker containers)"
-    log "🎯 Geo-fence active: $total_ranges IP ranges protecting host + containers"
+# Check if chain exists - only build if needed
+if ! iptables -L "$CHAIN_NAME" >/dev/null 2>&1; then
+    # Chain doesn't exist - build it for the first time
+    log "   Building geo-fence chain: $CHAIN_NAME (first time setup)"
+    
+    # Create the new chain
+    iptables -N "$CHAIN_NAME"
+    
+    # 1. Allow established and related connections (return traffic from server-initiated connections)
+    iptables -A "$CHAIN_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT
+    log "   Added: Allow established and related connections (return traffic from server-initiated connections)"
+    
+    # 2. Allow loopback traffic (localhost talking to itself - essential for many services)
+    iptables -A "$CHAIN_NAME" -i lo -j ACCEPT
+    log "   Added: Allow loopback traffic (localhost talking to itself - essential for many services)"
+    
+    # 3. Allow SSH connections from anywhere (prevents lockout - cloud firewall should restrict this)
+    iptables -A "$CHAIN_NAME" -p tcp --dport 22 -j ACCEPT
+    log "   Added: Allow SSH connections from anywhere (prevents lockout - cloud firewall should restrict this)"
+    
+    # 4. Drop traffic from non-allowed countries
+    iptables -A "$CHAIN_NAME" -m set ! --match-set "$IPSET_NAME" src -j DROP
+    log "   Added: Drop traffic from non-allowed countries"
+    
+    # 5. Return to original chain (allows everything else to continue normally)
+    iptables -A "$CHAIN_NAME" -j RETURN
 else
-    log "   Added: Geo-fence blocking (protects host services - Docker not detected)"
-    log "🎯 Geo-fence active: $total_ranges IP ranges protecting host"
+    # Chain already exists - ready for updated data
+    log "   Firewall infrastructure ready - chain exists"
 fi
+
+# Install jump rules to activate the chain (avoid duplicates)
+if ! iptables -C INPUT -j "$CHAIN_NAME" 2>/dev/null; then
+    iptables -I INPUT 1 -j "$CHAIN_NAME"
+    log "   Added: Jump rule in INPUT chain"
+fi
+if ! iptables -C FORWARD -j "$CHAIN_NAME" 2>/dev/null; then
+    iptables -I FORWARD 1 -j "$CHAIN_NAME"
+    log "   Added: Jump rule in FORWARD chain"
+fi
+
+log "🎯 Geo-fence active: $total_ranges IP ranges protecting host + containers + all forwarded traffic"
