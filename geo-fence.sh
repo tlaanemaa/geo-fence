@@ -147,17 +147,17 @@ if ! iptables -L "$CHAIN_NAME" >/dev/null 2>&1; then
     # Create the new chain
     iptables -N "$CHAIN_NAME"
     
-    # 1. Allow established and related connections (return traffic from server-initiated connections)
-    iptables -A "$CHAIN_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT
-    log "   Added: Allow established and related connections (return traffic from server-initiated connections)"
+    # 1. Skip geo-blocking for established and related connections (return traffic from server-initiated connections)
+    iptables -A "$CHAIN_NAME" -m state --state RELATED,ESTABLISHED -j RETURN
+    log "   Added: Skip geo-blocking for established and related connections (return traffic from server-initiated connections)"
     
-    # 2. Allow loopback traffic (localhost talking to itself - essential for many services)
-    iptables -A "$CHAIN_NAME" -i lo -j ACCEPT
-    log "   Added: Allow loopback traffic (localhost talking to itself - essential for many services)"
+    # 2. Skip geo-blocking for loopback traffic (localhost talking to itself - essential for many services)
+    iptables -A "$CHAIN_NAME" -i lo -j RETURN
+    log "   Added: Skip geo-blocking for loopback traffic (localhost talking to itself - essential for many services)"
     
-    # 3. Allow SSH connections from anywhere (prevents lockout - cloud firewall should restrict this)
-    iptables -A "$CHAIN_NAME" -p tcp --dport 22 -j ACCEPT
-    log "   Added: Allow SSH connections from anywhere (prevents lockout - cloud firewall should restrict this)"
+    # 3. Skip geo-blocking for SSH connections (prevents lockout - cloud firewall should restrict this)
+    iptables -A "$CHAIN_NAME" -p tcp --dport 22 -j RETURN
+    log "   Added: Skip geo-blocking for SSH connections (prevents lockout - cloud firewall should restrict this)"
     
     # 4. Drop traffic from non-allowed countries
     iptables -A "$CHAIN_NAME" -m set ! --match-set "$IPSET_NAME" src -j DROP

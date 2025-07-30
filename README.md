@@ -74,6 +74,31 @@ This process repeats automatically every 7 days to keep the IP lists current.
 | `ALLOWED_COUNTRIES`  | Comma-separated list of 2-letter country codes. | `se`              |
 | `UPDATE_INTERVAL`    | How often to update IP lists, in seconds.       | `604800` (7 days) |
 
+## Cleanup & Removal
+
+To completely remove geo-fence and reset your firewall to its original state:
+
+```bash
+# 1. Remove jump rules from main chains
+iptables -D INPUT -j GEO-FENCE-CHECK
+iptables -D FORWARD -j GEO-FENCE-CHECK
+
+# 2. Flush and delete the custom chain
+iptables -F GEO-FENCE-CHECK
+iptables -X GEO-FENCE-CHECK
+
+# 3. Destroy the IP set
+ipset destroy geo_fence
+
+# 4. Verify cleanup (optional)
+iptables -L GEO-FENCE-CHECK && echo "❌ Chain still exists!" || echo "✅ Chain removed"
+ipset list geo_fence && echo "❌ IPset still exists!" || echo "✅ IPset removed"
+```
+
+**Note:** Error messages like "No chain/target/match by that name" or "set does not exist" are **normal and good** - they mean there's nothing to clean up! If you need these commands to continue running even when they fail (e.g., in a script), add `|| true` to each line.
+
+After running these commands, you can safely run geo-fence again from scratch.
+
 ## Troubleshooting
 
 #### Emergency Unlock
@@ -81,9 +106,11 @@ This process repeats automatically every 7 days to keep the IP lists current.
 If you are locked out, connect to your server via a recovery console (e.g., VNC or a cloud provider console) and run these commands to disable the firewall rules:
 
 ```bash
-iptables -D INPUT -j GEO-FENCE-CHECK 2>/dev/null || true
-iptables -D FORWARD -j GEO-FENCE-CHECK 2>/dev/null || true
+iptables -D INPUT -j GEO-FENCE-CHECK
+iptables -D FORWARD -j GEO-FENCE-CHECK
 ```
+
+If you see "No chain/target/match by that name" errors, that's good - it means the rules are already removed!
 
 #### Common Issues
 
